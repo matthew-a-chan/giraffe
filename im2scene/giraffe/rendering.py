@@ -39,6 +39,9 @@ class Renderer(object):
             if rp == 'object_rotation':
                 self.set_random_seed()
                 self.render_object_rotation(img_out_path)
+            if rp == 'object_pitch':
+                self.set_random_seed()
+                self.render_object_pitch(img_out_path)
             if rp == 'object_translation_horizontal':
                 self.set_random_seed()
                 self.render_object_translation_horizontal(img_out_path)
@@ -70,6 +73,7 @@ class Renderer(object):
                 self.set_random_seed()
                 self.render_add_objects_clevr6(img_out_path)
 
+                
     def render_object_rotation(self, img_out_path, batch_size=15, n_steps=32):
         gen = self.generator
         bbox_generator = gen.bounding_box_generator
@@ -113,6 +117,46 @@ class Renderer(object):
             out, out_folder, name='rotation_object',
             is_full_rotation=is_full_rotation,
             add_reverse=(not is_full_rotation))
+
+                
+    def render_object_pitch(self, img_out_path, batch_size=15, n_steps=32):
+        gen = self.generator
+        bbox_generator = gen.bounding_box_generator
+
+        n_boxes = bbox_generator.n_boxes
+
+        # Set pitch range
+        v_scale = [0., 1.] #[0.1, 0.9]
+
+        # Get Random codes and bg rotation
+        latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
+        bg_rotation = gen.get_random_bg_rotation(batch_size)
+
+        # Set Camera & evaluate transformations
+        s_val = [[0, 0, 0] for i in range(n_boxes)]
+        t_val = [[0.5, 0.5, 0.5] for i in range(n_boxes)]
+        r_val = [0.5 for i in range(n_boxes)]
+        transformations = gen.get_transformations(s_val, t_val, r_val, batch_size)
+
+        out = []
+        for step in range(n_steps):
+            # Get pitch for this step
+            v = step * 1.0 / (n_steps - 1)
+            v = v_scale[0] + v * (v_scale[1] - v_scale[0])
+            camera_matrices = gen.get_camera(val_v=v, batch_size=batch_size)
+
+            # evaluate model
+            with torch.no_grad():
+                out_i = gen(batch_size, latent_codes, camera_matrices,
+                            transformations, bg_rotation, mode='val')
+            out.append(out_i.cpu())
+        out = torch.stack(out)
+        out_folder = join(img_out_path, 'pitch_object')
+        makedirs(out_folder, exist_ok=True)
+        self.save_video_and_images(
+            out, out_folder, name='pitch_object',
+            is_full_rotation=True,
+            add_reverse=False)
 
     def render_object_translation_horizontal(self, img_out_path, batch_size=15,
                                              n_steps=32):

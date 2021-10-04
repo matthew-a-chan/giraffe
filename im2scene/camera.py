@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
 import torch
 from scipy.spatial.transform import Rotation as Rot

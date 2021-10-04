@@ -23,7 +23,11 @@ if not os.path.exists(render_dir):
 model = config.get_model(cfg, device=device)
 
 checkpoint_io = CheckpointIO(out_dir, model=model)
-checkpoint_io.load(cfg['test']['model_file'])
+try:
+    checkpoint_io.load(cfg['test']['model_file'])
+except:
+    print(cfg['test']['model_file'], 'not found. Using:', cfg['test']['model_file'].replace('_best', ''))
+    checkpoint_io.load(cfg['test']['model_file'].replace('_best', ''))
 
 # Generator
 renderer = config.get_renderer(model, cfg, device=device)

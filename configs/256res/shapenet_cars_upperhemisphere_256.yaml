@@ -1,0 +1,23 @@
+data:
+  path: data/shapenet_cars_upperhemisphere/*/rgb/*.png
+  fid_file: data/fid_files/shapenet_cars_upperhemisphere_256/shapenet_cars_upperhemisphere_256.npz
+  img_size: 256
+model:
+  background_generator_kwargs:
+    rgb_out_dim: 256
+  bounding_box_generator_kwargs:
+    scale_range_min: [0.5, 0.5, 0.5]
+    scale_range_max: [0.5, 0.5, 0.5]
+    translation_range_min: [0., 0., 0.]
+    translation_range_max: [0., 0., 0.]
+  generator_kwargs:
+    range_v: [0.05, 0.5]
+    fov: 13.9 # 2*arctan(128/(2*525)) as described by intrinsics and https://stackoverflow.com/questions/39992968/how-to-calculate-field-of-view-of-the-camera-from-camera-intrinsic-matrix
+  neural_renderer_kwargs:
+    input_dim: 256
+    n_feat: 256
+  decoder_kwargs:
+    rgb_out_dim: 256
+training:
+  out_dir:  out/shapenet_cars_upperhemisphere_256
+  learning_rate: 0.00025

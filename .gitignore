@@ -9,3 +9,8 @@ out
 *.prof
 .nfs*
 _cache_*
+
+.ipynb_checkpoints/
+__pycache__/
+
+data/
