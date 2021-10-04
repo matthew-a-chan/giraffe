@@ -58,7 +58,7 @@ class GIRAFFE(nn.Module):
         gen = self.generator_test
         if gen is None:
             gen = self.generator
-        return gen(batch_size=batch_size)
+        return gen(batch_size=batch_size, **kwargs)
 
     def generate_test_images(self):
         gen = self.generator_test
