@@ -99,13 +99,13 @@ class Generator(nn.Module):
             bg_rotation = self.get_random_bg_rotation(batch_size)
 
         if return_alpha_map:
-            rgb_v, alpha_map = self.volume_render_image(
+            rgb_v, depth_map, alpha_map = self.volume_render_image(
                 latent_codes, camera_matrices, transformations, bg_rotation,
                 mode=mode, it=it, return_alpha_map=True,
                 not_render_background=not_render_background)
             return alpha_map
         else:
-            rgb_v = self.volume_render_image(
+            rgb_v, depth_map = self.volume_render_image(
                 latent_codes, camera_matrices, transformations, bg_rotation,
                 mode=mode, it=it, not_render_background=not_render_background,
                 only_render_background=only_render_background)
@@ -113,7 +113,7 @@ class Generator(nn.Module):
                 rgb = self.neural_renderer(rgb_v)
             else:
                 rgb = rgb_v
-            return rgb
+            return rgb, depth_map
 
     def get_n_boxes(self):
         if self.bounding_box_generator is not None:
@@ -478,11 +478,15 @@ class Generator(nn.Module):
 
         # Composite
         sigma_sum, feat_weighted = self.composite_function(sigma, feat)
-
+        
         # Get Volume Weights
         weights = self.calc_volume_weights(di, ray_vector, sigma_sum)
         feat_map = torch.sum(weights.unsqueeze(-1) * feat_weighted, dim=-2)
 
+        # compute depth map
+        depth_map = (di * weights).sum(-1).reshape(-1, 1, 16, 16).permute(0, 1, 3, 2)
+        # We permute feat_maps to flip across x/y. We must do that to the depth maps as well to ensure they line up.   
+        
         # Reformat output
         feat_map = feat_map.permute(0, 2, 1).reshape(
             batch_size, -1, res, res)  # B x feat x h x w
@@ -500,6 +504,6 @@ class Generator(nn.Module):
                 acc_map = acc_map.permute(0, 1, 3, 2)
                 acc_maps.append(acc_map)
             acc_map = torch.cat(acc_maps, dim=1)
-            return feat_map, acc_map
+            return feat_map, depth_map, acc_map
         else:
-            return feat_map
+            return feat_map, depth_map

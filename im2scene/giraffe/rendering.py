@@ -622,7 +622,7 @@ class Renderer(object):
                 (out_file[:-4] + '_sm.mp4'), img, fps=30, quality=4)
 
     def save_video_and_images(self, imgs, out_folder, name='rotation_object',
-                              is_full_rotation=False, img_n_steps=6,
+                              is_full_rotation=False, img_n_steps=5,
                               add_reverse=False):
 
         # Save video

@@ -121,9 +121,9 @@ class Trainer(BaseTrainer):
 
         if self.multi_gpu:
             latents = generator.module.get_vis_dict()
-            x_fake = generator(**latents)
+            x_fake, depth_map = generator(**latents)
         else:
-            x_fake = generator()
+            x_fake, depth_map = generator()
 
         d_fake = discriminator(x_fake)
         gloss = compute_bce(d_fake, 1)
@@ -161,9 +161,9 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             if self.multi_gpu:
                 latents = generator.module.get_vis_dict()
-                x_fake = generator(**latents)
+                x_fake, depth_map = generator(**latents)
             else:
-                x_fake = generator()
+                x_fake, depth_map = generator()
 
         x_fake.requires_grad_()
         d_fake = discriminator(x_fake)
@@ -190,7 +190,7 @@ class Trainer(BaseTrainer):
             gen = self.model.generator
         gen.eval()
         with torch.no_grad():
-            image_fake = self.generator(**self.vis_dict, mode='val').cpu()
+            image_fake, depth_map = self.generator(**self.vis_dict, mode='val').cpu()
 
         if self.overwrite_visualization:
             out_file_name = 'visualization.png'
