@@ -72,7 +72,61 @@ class Renderer(object):
             if rp == 'render_add_clevr6':
                 self.set_random_seed()
                 self.render_add_objects_clevr6(img_out_path)
+            
+            if True:
+                self.set_random_seed()
+                self.render_object_figure(img_out_path)
 
+                
+    def render_object_figure(self, img_out_path, batch_size=15, n_steps=3):
+        gen = self.generator
+        bbox_generator = gen.bounding_box_generator
+
+        n_boxes = bbox_generator.n_boxes
+
+        r_scale = [.2, 1.]
+        v_scale = [0., 1.]
+
+        # Get Random codes and bg rotation
+        latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
+        bg_rotation = gen.get_random_bg_rotation(batch_size)
+
+        # evaluate rotation transformations
+        s_val = [[0, 0, 0] for i in range(n_boxes)]
+        t_val = [[0.5, 0.5, 0.5] for i in range(n_boxes)]
+        r_val = [0. for i in range(n_boxes)]
+        s, t, _ = gen.get_transformations(s_val, t_val, r_val, batch_size)
+
+        out = []
+        for step in range(n_steps):
+            # Get rotation for this step
+            r = [step * 1.0 / (n_steps - 1) for i in range(n_boxes)]
+            r = [r_scale[0] + ri * (r_scale[1] - r_scale[0]) for ri in r]
+            r = gen.get_rotation(r, batch_size)
+            
+            # Get pitch for this step
+            v = step * 1.0 / (n_steps - 1)
+            v = v_scale[0] + v * (v_scale[1] - v_scale[0])
+            # get camera for pitch
+            camera_matrices = gen.get_camera(val_v=v, batch_size=batch_size)
+
+            # define full transformation and evaluate model
+            transformations = [s, t, r]
+            with torch.no_grad():
+                out_i = gen(batch_size, latent_codes, camera_matrices,
+                            transformations, bg_rotation, mode='val')
+            out.append(out_i.cpu())
+        out = torch.stack(out)
+        out_folder = join(img_out_path, 'figure_object')
+        makedirs(out_folder, exist_ok=True)
+        self.save_video_and_images(
+            out, out_folder, name='figure_object',
+            is_full_rotation=False,
+            add_reverse=True,
+            img_n_steps=3,
+        )
+
+                
                 
     def render_object_rotation(self, img_out_path, batch_size=15, n_steps=32):
         gen = self.generator
@@ -126,13 +180,13 @@ class Renderer(object):
         n_boxes = bbox_generator.n_boxes
 
         # Set pitch range
-        v_scale = [0., 1.] #[0.1, 0.9]
+        v_scale = [0., 1.]
 
         # Get Random codes and bg rotation
         latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
         bg_rotation = gen.get_random_bg_rotation(batch_size)
 
-        # Set Camera & evaluate transformations
+        # evaluate rotation transformations
         s_val = [[0, 0, 0] for i in range(n_boxes)]
         t_val = [[0.5, 0.5, 0.5] for i in range(n_boxes)]
         r_val = [0.5 for i in range(n_boxes)]
@@ -143,6 +197,7 @@ class Renderer(object):
             # Get pitch for this step
             v = step * 1.0 / (n_steps - 1)
             v = v_scale[0] + v * (v_scale[1] - v_scale[0])
+            # get camera for pitch
             camera_matrices = gen.get_camera(val_v=v, batch_size=batch_size)
 
             # evaluate model
@@ -640,5 +695,5 @@ class Renderer(object):
         for idx in range(batch_size):
             img_grid = imgs[idx_paper, idx]
             save_image(make_grid(
-                img_grid, nrow=img_n_steps, pad_value=1.), join(
+                img_grid, nrow=img_n_steps, padding=0), join(
                     out_folder, '%04d_%s.jpg' % (idx, name)))

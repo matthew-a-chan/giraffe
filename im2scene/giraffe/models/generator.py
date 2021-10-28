@@ -85,7 +85,8 @@ class Generator(nn.Module):
                 transformations=None, bg_rotation=None, mode="training", it=0,
                 return_alpha_map=False,
                 not_render_background=False,
-                only_render_background=False):
+                only_render_background=False,
+                render_depth_maps=False):
         if latent_codes is None:
             latent_codes = self.get_latent_codes(batch_size)
 
@@ -113,7 +114,11 @@ class Generator(nn.Module):
                 rgb = self.neural_renderer(rgb_v)
             else:
                 rgb = rgb_v
-            return rgb, depth_map
+
+            if render_depth_maps:
+                return rgb, depth_map
+            else:
+                return rgb
 
     def get_n_boxes(self):
         if self.bounding_box_generator is not None:
