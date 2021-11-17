@@ -29,54 +29,113 @@ class Renderer(object):
         # sample temperature; only used for visualiations
         self.sample_tmp = 0.65
 
-    def set_random_seed(self):
-        torch.manual_seed(0)
-        np.random.seed(0)
+    def set_random_seed(self, seed=0):
+        torch.manual_seed(seed)
+        np.random.seed(seed)
 
     def render_full_visualization(self, img_out_path,
                                   render_program=['object_rotation']):
+        seed = 0
+        
         for rp in render_program:
             if rp == 'object_rotation':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_object_rotation(img_out_path)
             if rp == 'object_pitch':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_object_pitch(img_out_path)
             if rp == 'object_translation_horizontal':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_object_translation_horizontal(img_out_path)
             if rp == 'object_translation_vertical':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_object_translation_depth(img_out_path)
             if rp == 'interpolate_app':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_interpolation(img_out_path)
             if rp == 'interpolate_app_bg':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_interpolation_bg(img_out_path)
             if rp == 'interpolate_shape':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_interpolation(img_out_path, mode='shape')
             if rp == 'object_translation_circle':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_object_translation_circle(img_out_path)
             if rp == 'render_camera_elevation':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_camera_elevation(img_out_path)
             if rp == 'render_add_cars':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_add_objects_cars5(img_out_path)
             if rp == 'render_add_clevr10':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_add_objects_clevr10(img_out_path)
             if rp == 'render_add_clevr6':
-                self.set_random_seed()
+                self.set_random_seed(seed)
                 self.render_add_objects_clevr6(img_out_path)
             
-            if True:
-                self.set_random_seed()
-                self.render_object_figure(img_out_path)
+        # self.set_random_seed(seed)
+        # self.render_object_figure(img_out_path)
 
+        # self.set_random_seed(seed)
+        # self.render_object_yaw_spread(img_out_path)
+
+        # self.set_random_seed(seed)
+        # self.render_object_pitch_spread(img_out_path)
+
+        self.set_random_seed(seed)
+        self.render_object_orbit(img_out_path)
+
+    def render_object_orbit(self, img_out_path, batch_size=15, n_steps=360):
+        gen = self.generator
+        bbox_generator = gen.bounding_box_generator
+
+        n_boxes = bbox_generator.n_boxes
+
+        r_scale = 1
+        v_scale = 1
+
+        # Get Random codes and bg rotation
+        latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
+        bg_rotation = gen.get_random_bg_rotation(batch_size)
+
+        # evaluate rotation transformations
+        s_val = [[0, 0, 0] for i in range(n_boxes)]
+        t_val = [[0.5, 0.5, 0.5] for i in range(n_boxes)]
+        r_val = [0. for i in range(n_boxes)]
+        s, t, _ = gen.get_transformations(s_val, t_val, r_val, batch_size)
+
+        out = []
+        for step in range(n_steps):
+            # Get rotation for this step
+            r = [step * 1.0 / (n_steps - 1) for i in range(n_boxes)]
+            r = [(np.sin(2 * 3.14 * ri) * .5 + .5) * r_scale for ri in r]
+            r = gen.get_rotation(r, batch_size)
+            
+            # Get pitch for this step
+            v = step * 1.0 / (n_steps - 1)
+            v = (np.cos(2 * 3.14 * v) * .5 + .5) * v_scale
+            # get camera for pitch
+            camera_matrices = gen.get_camera(val_v=v, batch_size=batch_size)
+
+            # define full transformation and evaluate model
+            transformations = [s, t, r]
+            with torch.no_grad():
+                out_i = gen(batch_size, latent_codes, camera_matrices,
+                            transformations, bg_rotation, mode='val')
+            out.append(out_i.cpu())
+        out = torch.stack(out)
+        out_folder = join(img_out_path, 'orbit')
+        makedirs(out_folder, exist_ok=True)
+        self.save_video_and_images(
+            out, out_folder, name='orbit',
+            is_full_rotation=False,
+            add_reverse=False,
+            img_n_steps=12,
+            save_individual_videos=True,
+        )
+        
                 
     def render_object_figure(self, img_out_path, batch_size=15, n_steps=3):
         gen = self.generator
@@ -85,7 +144,7 @@ class Renderer(object):
         n_boxes = bbox_generator.n_boxes
 
         r_scale = [.2, 1.]
-        v_scale = [0., 1.]
+        v_scale = [.5, .5]
 
         # Get Random codes and bg rotation
         latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
@@ -126,6 +185,92 @@ class Renderer(object):
             img_n_steps=3,
         )
 
+        
+    def render_object_yaw_spread(self, img_out_path, batch_size=15, n_steps=35):
+        gen = self.generator
+        bbox_generator = gen.bounding_box_generator
+
+        n_boxes = bbox_generator.n_boxes
+
+        # Set rotation range
+        r_scale = [-.25, 1.25]
+        is_full_rotation=False
+
+        # Get Random codes and bg rotation
+        latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
+        bg_rotation = gen.get_random_bg_rotation(batch_size)
+
+        # Set Camera
+        camera_matrices = gen.get_camera(batch_size=batch_size)
+        s_val = [[0, 0, 0] for i in range(n_boxes)]
+        t_val = [[0.5, 0.5, 0.5] for i in range(n_boxes)]
+        r_val = [0. for i in range(n_boxes)]
+        s, t, _ = gen.get_transformations(s_val, t_val, r_val, batch_size)
+
+        out = []
+        for step in range(n_steps):
+            # Get rotation for this step
+            r = [step * 1.0 / (n_steps - 1) for i in range(n_boxes)]
+            r = [r_scale[0] + ri * (r_scale[1] - r_scale[0]) for ri in r]
+            r = gen.get_rotation(r, batch_size)
+
+            # define full transformation and evaluate model
+            transformations = [s, t, r]
+            with torch.no_grad():
+                out_i = gen(batch_size, latent_codes, camera_matrices,
+                            transformations, bg_rotation, mode='val')
+            out.append(out_i.cpu())
+        out = torch.stack(out)
+        out_folder = join(img_out_path, 'yaw_spread')
+        makedirs(out_folder, exist_ok=True)
+        self.save_video_and_images(
+            out, out_folder, name='yaw_spread',
+            is_full_rotation=is_full_rotation,
+            add_reverse=(not is_full_rotation),
+            img_n_steps=7,
+        )
+
+    def render_object_pitch_spread(self, img_out_path, batch_size=15, n_steps=32):
+        gen = self.generator
+        bbox_generator = gen.bounding_box_generator
+
+        n_boxes = bbox_generator.n_boxes
+
+        # Set pitch range
+        v_scale = [-2, 3]
+
+        # Get Random codes and bg rotation
+        latent_codes = gen.get_latent_codes(batch_size, tmp=self.sample_tmp)
+        bg_rotation = gen.get_random_bg_rotation(batch_size)
+
+        # evaluate rotation transformations
+        s_val = [[0, 0, 0] for i in range(n_boxes)]
+        t_val = [[0.5, 0.5, 0.5] for i in range(n_boxes)]
+        r_val = [0.5 for i in range(n_boxes)]
+        transformations = gen.get_transformations(s_val, t_val, r_val, batch_size)
+
+        out = []
+        for step in range(n_steps):
+            # Get pitch for this step
+            v = step * 1.0 / (n_steps - 1)
+            v = v_scale[0] + v * (v_scale[1] - v_scale[0])
+            # get camera for pitch
+            camera_matrices = gen.get_camera(val_v=v, batch_size=batch_size)
+
+            # evaluate model
+            with torch.no_grad():
+                out_i = gen(batch_size, latent_codes, camera_matrices,
+                            transformations, bg_rotation, mode='val')
+            out.append(out_i.cpu())
+        out = torch.stack(out)
+        out_folder = join(img_out_path, 'pitch_spread')
+        makedirs(out_folder, exist_ok=True)
+        self.save_video_and_images(
+            out, out_folder, name='pitch_spread',
+            is_full_rotation=True,
+            add_reverse=False,
+            stack_vertical=True,
+        )
                 
                 
     def render_object_rotation(self, img_out_path, batch_size=15, n_steps=32):
@@ -678,10 +823,17 @@ class Renderer(object):
 
     def save_video_and_images(self, imgs, out_folder, name='rotation_object',
                               is_full_rotation=False, img_n_steps=5,
-                              add_reverse=False):
+                              add_reverse=False,
+                              stack_vertical=False,
+                              save_individual_videos=False):
 
         # Save video
         out_file_video = join(out_folder, '%s.mp4' % name)
+        if save_individual_videos:
+            for i in range(0, imgs.shape[1]): # batch size
+                out_file_video = join(out_folder, '%04d_%s.mp4' % (i, name))
+                self.write_video(out_file_video, imgs[:, i:i+1], add_reverse=add_reverse, write_small_vis=False)
+        # also still write big video
         self.write_video(out_file_video, imgs, add_reverse=add_reverse)
 
         # Save images
@@ -695,5 +847,5 @@ class Renderer(object):
         for idx in range(batch_size):
             img_grid = imgs[idx_paper, idx]
             save_image(make_grid(
-                img_grid, nrow=img_n_steps, padding=0), join(
+                img_grid, nrow=1 if stack_vertical else img_n_steps, padding=0, normalize=True, scale_each=True), join(
                     out_folder, '%04d_%s.jpg' % (idx, name)))

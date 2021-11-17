@@ -23,4 +23,6 @@ training:
   out_dir:  out/FFHQ_256b
   learning_rate: 0.00025
 rendering:
-  render_program: ['object_rotation', 'interpolate_app', 'interpolate_shape', 'object_pitch']
+  render_program: []
+    # render_program: ['object_rotation']
+  # render_program: ['object_rotation', 'interpolate_app', 'interpolate_shape', 'object_pitch']
